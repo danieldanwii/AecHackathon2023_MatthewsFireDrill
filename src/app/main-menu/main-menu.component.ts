@@ -8,11 +8,8 @@ import { IfcService } from '../services/ifc.service';
   styleUrls: ['./main-menu.component.css'],
 })
 export class MainMenuComponent{
-  // OPENING IFC FILES
-  ifcService: IfcService;
 
-  constructor(service: IfcService) {
-    this.ifcService = service;
+  constructor(private ifcService: IfcService) {
   }
 
   @ViewChild('openIfcFile', {static: false}) openIfcFile?: ElementRef;
@@ -29,15 +26,8 @@ export class MainMenuComponent{
     })
   }
 
-  onOpenProject(){
-    this.openProject?.nativeElement.addEventListener('change', (event: Event) => {
-      const target = event.target as HTMLInputElement;
-      
-      if(!target.files) return;
-
-      this.ifcService.loadProjectIfcs(target.files);
-
-    })
+  onGetSpaces(){
+    this.ifcService.showIfcSpaces();
   }
 
   

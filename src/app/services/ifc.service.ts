@@ -1,6 +1,7 @@
 import { DoubleSide, MeshLambertMaterial } from 'three';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { IFCLoader } from 'web-ifc-three/IFCLoader';
+import { IfcScene } from 'web-ifc-viewer/dist/components/context/scene';
 
 import { IFCWALL,
   IFCWALLSTANDARDCASE,
@@ -9,17 +10,21 @@ import { IFCWALL,
   IFCMEMBER,
   IFCPLATE,
   IFCCURTAINWALL,
-  IFCDOOR } from 'web-ifc'
-import { IfcModel } from 'web-ifc-three/IFC/BaseDefinitions';
+  IFCDOOR,
+  IFCSPACE } from 'web-ifc'
 
 export class IfcService {
   currentModel = -1;
   ifcViewer?: IfcViewerAPI;
   container?: HTMLElement;
+  witIfcLoader?: IFCLoader;
+  ifcScene?: IfcScene;
+  
   onSelectActions: ((modelID: number, id: number) => void)[];
   ifcProductsType: { [modelID: number]: { [expressID: number]: number } };
-  witIfcLoader?: IFCLoader;
-  readonly subsetNaming: string = 'subset-';
+  ifcModel: any;
+  modelSubset: any;
+
 
   constructor() {
     this.onSelectActions = [];
@@ -57,6 +62,8 @@ export class IfcService {
     this.ifcViewer.IFC.setWasmPath('../assets/');
     // Multithreading
     this.ifcViewer.IFC.properties.loader.ifcManager.useWebWorkers(true, '../assets/IFCWorker.js')
+
+    this.ifcScene = this.ifcViewer.context.scene;
   }
 
   setupInputs() {
@@ -64,95 +71,19 @@ export class IfcService {
     this.container.onclick = this.handleClick;
     this.container.ondblclick = this.handleDoubleClick;
     this.container.onmousemove = this.handleMouseMove;
-  }
 
-  subscribeOnSelect(action: (modelID: number, id: number) => void) {
-    this.onSelectActions.push(action);
+    document.addEventListener('keydown', (event) => {
+      this.customKeyControls(event);
+    })
   }
 
   /////////////////////////////////////////////////////////////////////////
   // LOADERS
   async loadIfc(file: File) {
-    console.log('Calling Load')
-    const model = await this.ifcViewer?.IFC.loadIfc(file);
-    console.log('Finished loading model')
+    this.ifcModel = await this.ifcViewer?.IFC.loadIfc(file);
+    this.replaceOriginalModelBySubset(this.ifcModel, file.name)
 
-    const ifcModel = model as IfcModel
-    console.log('types: ')
-    console.log(ifcModel.types)
-
-
-    const properties = this.ifcViewer?.IFC.getSpatialStructure(model.modelID);
-    console.log(properties)
-
-    // console.log('Before calling preprocessModel')
-    // this.preprocessModel(file);
-  }
-
-  async loadIfcUrl(filePath: string) {
-    await this.ifcViewer?.IFC.loadIfcUrl(filePath);
-  }
-
-  async loadProjectIfcs(ifcFiles: FileList){
-    for(let i = 0; i < ifcFiles.length; i++){
-      console.log(ifcFiles[i])
-      await this.loadIfc(ifcFiles[i]);
-    }
-  }
-
-setupProgressNotification(progressText: HTMLElement) {
-  this.ifcViewer?.IFC.loader.ifcManager.setOnProgress((event) => {
-    const percent = (event.loaded / event.total) * 100;
-    const result = Math.trunc(percent);
-    progressText.innerText = result.toString();
-    })
-  }
-
-  async preprocessModel(file: File){
-    console.log('Called preprocessModel');
-    const url = URL.createObjectURL(file);
-
-    const result = await this.ifcViewer?.GLTF.exportIfcFileAsGltf({
-      ifcFileUrl: url,
-      splitByFloors: true,
-      categories: {
-          walls: [IFCWALL, IFCWALLSTANDARDCASE],
-          slabs: [IFCSLAB],
-          windows: [IFCWINDOW],
-          curtainwalls: [IFCMEMBER, IFCPLATE, IFCCURTAINWALL],
-          doors: [IFCDOOR]
-      },
-      getProperties: true,
-      onProgress(progress, total, process) {
-        console.log(progress, total, process);
-      },
-    });
-
-    if(!result) return;
-
-    // Download result
-    const link = document.createElement('a');
-    document.body.appendChild(link);
-
-    for(const categoryName in result.gltf) {
-      const category = result.gltf[categoryName];
-      for(const levelName in category) {
-        const file = category[levelName].file;
-        if(file) {
-          link.download = `${file.name}_${categoryName}_${levelName}.gltf`;
-          link.href = URL.createObjectURL(file);
-          link.click();
-        }
-      }
-    }
-
-    for(let jsonFile of result.json) {
-      link.download = `${jsonFile.name}`;
-      link.href = URL.createObjectURL(jsonFile);
-      link.click();
-    }
-
-    link.remove();
+    // const properties = this.ifcViewer?.IFC.getSpatialStructure(this.ifcModel.modelID);
   }
 
   ////////////////////////////////////////////////////////////////////////////
@@ -162,10 +93,10 @@ setupProgressNotification(progressText: HTMLElement) {
       new Set(ifcModel.geometry.attributes.expressID.array),
     );
   }
-  private createModelSubset(ifcModel: any) {
+
+  private createModelSubset(ifcModel: any, subsetName: string) {
     const allIds = this.getAllIds(ifcModel);
-    const subsetName = this.subsetNaming + ifcModel.modelID;
-    console.log(subsetName);
+    console.log('subset:' + subsetName);
 
     return this.ifcViewer?.IFC.loader.ifcManager.createSubset({
       modelID: ifcModel.modelID,
@@ -173,10 +104,48 @@ setupProgressNotification(progressText: HTMLElement) {
       applyBVH: false,
       scene: ifcModel.parent,
       removePrevious: true,
-      customID: subsetName,
+      customID: subsetName
     });
   }
 
+  private replaceOriginalModelBySubset(ifcModel: any, ifcModelName: string){
+    this.modelSubset = this.createModelSubset(ifcModel, ifcModelName);
+    this.toggleSubsetVisibility(ifcModel, false);
+    
+    this.toggleSubsetVisibility(this.modelSubset, true);
+  }
+
+  async showIfcSpaces(){
+    const spaces = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSPACE, false) as number[];
+    console.log(spaces);
+
+    const spaceMaterial = this.newMaterial(0x3984221, 50);
+    const spacesSubset = this.ifcViewer?.IFC.loader.ifcManager.createSubset({
+      modelID: this.ifcModel.modelID,
+      ids: spaces,
+      removePrevious: true,
+      material: spaceMaterial
+    })
+
+    this.toggleSubsetVisibility(this.modelSubset, false);
+    this.toggleSubsetVisibility(spacesSubset, true);
+  }
+
+  
+  ////////////////////////////////////////////////////////////////////////////
+  // VISIBILITY
+  private toggleSubsetVisibility(subsetMesh: any, isVisible: boolean){
+    if(!subsetMesh) return;
+
+    const pickableIfcModels = this.ifcViewer?.context.items.pickableIfcModels;
+    if(isVisible){
+      this.ifcScene?.add(subsetMesh);
+      pickableIfcModels?.push(subsetMesh);
+    }else{
+      subsetMesh.removeFromParent();
+      pickableIfcModels?.splice(pickableIfcModels.indexOf(subsetMesh), 1);
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////////
   // SELECTION
@@ -188,20 +157,29 @@ setupProgressNotification(progressText: HTMLElement) {
   }
 
   async pick() {
-    const found = await this.ifcViewer?.IFC.selector.pickIfcItem();
+    const found = await this.ifcViewer?.IFC.selector.pickIfcItem(false, false);
     if (found == null || found == undefined) return;
     this.select(found.modelID, found.id, false);
   }
 
-  private handleClick = (_event: Event) => {};
+  /////////////////////////////////////////////////////////////////////////
+  // CONTROLS
+  private handleClick = async (_event: Event) => {
+    await this.pick();
+  };
 
   private handleDoubleClick = async (event: Event) => {
-    await this.pick();
   };
 
   private handleMouseMove = (_event: Event) => {
     this.ifcViewer?.IFC.selector.prePickIfcItem();
   };
+
+  private customKeyControls(event: KeyboardEvent) {
+    if(event.key == "Escape"){
+      this.ifcViewer?.IFC.selector.unpickIfcItems();
+    }
+  }
 
   /////////////////////////////////////////////////////////////////////////
   // ERRORS
@@ -215,7 +193,7 @@ setupProgressNotification(progressText: HTMLElement) {
     return new MeshLambertMaterial({
       color,
       opacity,
-      transparent: true,
+      transparent: false,
       depthTest: false,
       side: DoubleSide,
     });
