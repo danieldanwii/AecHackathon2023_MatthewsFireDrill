@@ -1,33 +1,36 @@
-import { DoubleSide, MeshLambertMaterial } from 'three';
+import { DoubleSide, MeshLambertMaterial, MeshBasicMaterial, LineBasicMaterial } from 'three';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { IFCLoader } from 'web-ifc-three/IFCLoader';
 import { IfcScene } from 'web-ifc-viewer/dist/components/context/scene';
+import { EventEmitter } from '@angular/core';
 
-import { IFCWALL,
-  IFCWALLSTANDARDCASE,
+import { 
+  IFCWALL,
   IFCSLAB,
-  IFCWINDOW,
-  IFCMEMBER,
-  IFCPLATE,
-  IFCCURTAINWALL,
   IFCDOOR,
-  IFCSPACE } from 'web-ifc'
+  IFCSPACE,
+  IFCSTAIR } from 'web-ifc'
+import { IfcObject } from './ifcObject.model';
 
 export class IfcService {
-  currentModel = -1;
   ifcViewer?: IfcViewerAPI;
   container?: HTMLElement;
   witIfcLoader?: IFCLoader;
   ifcScene?: IfcScene;
   
-  onSelectActions: ((modelID: number, id: number) => void)[];
   ifcProductsType: { [modelID: number]: { [expressID: number]: number } };
   ifcModel: any;
+
+  floorplans: string[] | undefined = ['No project loaded!'];
+  floorplansUpdated = new EventEmitter<any>();
+
+  selectedObject: IfcObject | null = null;
+
   modelSubset: any;
+  navMeshSubset: any;
 
 
   constructor() {
-    this.onSelectActions = [];
     this.ifcProductsType = {};
   }
 
@@ -52,7 +55,7 @@ export class IfcService {
     });
 
     this.ifcViewer.axes.setAxes();
-    this.ifcViewer.grid.setGrid(100, 100);
+    this.ifcViewer.grid.setGrid(5, 5);
 
     this.ifcViewer?.IFC.loader.ifcManager.applyWebIfcConfig({
       COORDINATE_TO_ORIGIN: true,
@@ -82,6 +85,8 @@ export class IfcService {
   async loadIfc(file: File) {
     this.ifcModel = await this.ifcViewer?.IFC.loadIfc(file);
     this.replaceOriginalModelBySubset(this.ifcModel, file.name)
+
+    this.generateFloorPlans();
 
     // const properties = this.ifcViewer?.IFC.getSpatialStructure(this.ifcModel.modelID);
   }
@@ -115,23 +120,38 @@ export class IfcService {
     this.toggleSubsetVisibility(this.modelSubset, true);
   }
 
-  async showIfcSpaces(){
-    const spaces = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSPACE, false) as number[];
-    console.log(spaces);
 
-    const spaceMaterial = this.newMaterial(0x3984221, 50);
-    const spacesSubset = this.ifcViewer?.IFC.loader.ifcManager.createSubset({
-      modelID: this.ifcModel.modelID,
-      ids: spaces,
-      removePrevious: true,
-      material: spaceMaterial
-    })
-
-    this.toggleSubsetVisibility(this.modelSubset, false);
-    this.toggleSubsetVisibility(spacesSubset, true);
+  ////////////////////////////////////////////////////////////////////////////
+  // PROPERTIES
+  async logProperties(ifcObject: IfcObject){
+    const properties = await this.ifcViewer?.IFC.getProperties(ifcObject.modelID, ifcObject.id, true, true);
+    console.log(properties);
   }
 
-  
+  /////////////////////////////////////////////////////////////////////////
+  // FLOOR PLANS
+  async generateFloorPlans(){
+    await this.ifcViewer?.plans.computeAllPlanViews(this.ifcModel.modelID);
+
+    const lineMaterial = new LineBasicMaterial({ color: 'black' });
+    const baseMaterial = new MeshBasicMaterial({
+      polygonOffset: true,
+      polygonOffsetFactor: 1, // positive value pushes polygon further away
+      polygonOffsetUnits: 1,
+    });
+    await this.ifcViewer?.edges.create('planview', this.ifcModel.modelID, lineMaterial, baseMaterial);
+
+    this.floorplans = this.ifcViewer?.plans.getAll(this.ifcModel.modelID);
+    console.log(this.floorplans);
+    this.floorplansUpdated.emit(this.floorplans);
+  }
+
+  showFloorPlan(floorplan: string){
+    this.ifcViewer?.plans.goTo(this.ifcModel.modelID, floorplan);
+    this.ifcViewer?.edges.toggle('planview', true);
+  }
+
+
   ////////////////////////////////////////////////////////////////////////////
   // VISIBILITY
   private toggleSubsetVisibility(subsetMesh: any, isVisible: boolean){
@@ -147,13 +167,59 @@ export class IfcService {
     }
   }
 
+  async showIfcSpaces(){
+    const spaces = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSPACE, false) as number[];
+    console.log(spaces);
+
+    const spaceMaterial = this.newMaterial(0xfbc02d, 50);
+    const spacesSubset = this.ifcViewer?.IFC.loader.ifcManager.createSubset({
+      modelID: this.ifcModel.modelID,
+      ids: spaces,
+      removePrevious: true,
+      material: spaceMaterial
+    })
+
+    this.toggleSubsetVisibility(this.modelSubset, false);
+    this.toggleSubsetVisibility(spacesSubset, true);
+  }
+
+  async showFloorsDoorsAndStairs(){
+    const navMeshItems = [];
+
+    const floors = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSLAB, false) as number[];
+    navMeshItems.push(floors);
+    
+    const doors = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCDOOR, false) as number[];
+    navMeshItems.push(doors);
+    
+    const stairs = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSTAIR, false) as number[];
+    navMeshItems.push(stairs);
+    
+    const walls = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCWALL, false) as number[];
+    navMeshItems.push(walls);
+
+    console.log(navMeshItems);
+
+    const navMeshSubsetName = 'navMeshSubset';
+    navMeshItems.forEach((category) => {
+      this.navMeshSubset = this.ifcViewer?.IFC.loader.ifcManager.createSubset({
+        modelID: this.ifcModel.modelID,
+        ids: category,
+        removePrevious: false,
+        customID: navMeshSubsetName
+      })
+    })
+
+    this.toggleSubsetVisibility(this.modelSubset, false);
+    this.toggleSubsetVisibility(this.navMeshSubset, true);
+  }
+
   /////////////////////////////////////////////////////////////////////////
   // SELECTION
   select(modelID: number, expressID: number, pick = true) {
     if (pick)
       this.ifcViewer?.IFC.selector.pickIfcItemsByID(modelID, [expressID]);
-    this.currentModel = modelID;
-    this.onSelectActions.forEach((action) => action(modelID, expressID));
+    this.selectedObject = new IfcObject(modelID, expressID);
   }
 
   async pick() {
@@ -179,6 +245,11 @@ export class IfcService {
     if(event.key == "Escape"){
       this.ifcViewer?.IFC.selector.unpickIfcItems();
     }
+    
+    if(event.key == "p"){
+      if(!this.selectedObject) return;
+      this.logProperties(this.selectedObject);
+    }
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -193,7 +264,7 @@ export class IfcService {
     return new MeshLambertMaterial({
       color,
       opacity,
-      transparent: false,
+      transparent: true,
       depthTest: false,
       side: DoubleSide,
     });

@@ -3,8 +3,15 @@
         <input #openIfcFile type="file" (click)="onOpenIfcFile()">
     </div>
 
-    <div class="menu-item">
+    <!-- <div class="menu-item">
         <button (click)="onGetSpaces()">Show Spaces</button>
     </div>
+    
+    <div class="menu-item">
+        <button (click)="onShowNavMeshItems()">Show NavMeshItems</button>
+    </div> -->
 
+    <div class="menu-item" *ngFor="let floorplan of floorplans">
+        <button (click)="showFloorPlan(floorplan)">{{floorplan}}</button>
+    </div>
 </div>

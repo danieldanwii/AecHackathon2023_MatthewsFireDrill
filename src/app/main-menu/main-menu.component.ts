@@ -1,4 +1,4 @@
-import { Component, NgModule, ViewChild, ElementRef} from '@angular/core';
+import { Component, NgModule, ViewChild, ElementRef, OnInit} from '@angular/core';
 
 import { IfcService } from '../services/ifc.service';
 
@@ -7,9 +7,17 @@ import { IfcService } from '../services/ifc.service';
   templateUrl: './main-menu.component.html',
   styleUrls: ['./main-menu.component.css'],
 })
-export class MainMenuComponent{
+export class MainMenuComponent implements OnInit{
+  floorplans: any;
 
   constructor(private ifcService: IfcService) {
+    this.floorplans = this.ifcService.floorplans;
+  }
+
+  ngOnInit(){
+    this.ifcService.floorplansUpdated.subscribe((updatedFloorsplans) => {
+      this.floorplans = updatedFloorsplans;
+    })
   }
 
   @ViewChild('openIfcFile', {static: false}) openIfcFile?: ElementRef;
@@ -26,9 +34,16 @@ export class MainMenuComponent{
     })
   }
 
+  showFloorPlan(floorplan: string){
+    this.ifcService.showFloorPlan(floorplan);
+  }
+
   onGetSpaces(){
     this.ifcService.showIfcSpaces();
   }
 
+  onShowNavMeshItems(){
+    this.ifcService.showFloorsDoorsAndStairs();
+  }
   
 }
