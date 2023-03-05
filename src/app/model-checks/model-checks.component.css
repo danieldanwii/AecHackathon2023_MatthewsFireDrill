@@ -1,0 +1,22 @@
+#fire-check-menu {
+    width: 35vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: top;
+}
+
+#issue-areas {
+    display: flex;
+    flex-direction: row;
+    justify-content: top;
+}
+
+#issue-areas-details{
+    height: 40vh;
+}
+
+#potential-solutions{
+    height: 50vh;
+}
+

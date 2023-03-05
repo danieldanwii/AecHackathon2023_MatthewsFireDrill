@@ -9,7 +9,8 @@ import {
   IFCSLAB,
   IFCDOOR,
   IFCSPACE,
-  IFCSTAIR } from 'web-ifc'
+  IFCSTAIR,
+  IFCWALLSTANDARDCASE } from 'web-ifc'
 import { IfcObject } from './ifcObject.model';
 
 export class IfcService {
@@ -23,6 +24,9 @@ export class IfcService {
 
   floorplans: string[] | undefined = ['No project loaded!'];
   floorplansUpdated = new EventEmitter<any>();
+
+  navMesh: any;
+  gltfLoader = this.ifcViewer?.GLTF
 
   selectedObject: IfcObject | null = null;
 
@@ -83,12 +87,18 @@ export class IfcService {
   /////////////////////////////////////////////////////////////////////////
   // LOADERS
   async loadIfc(file: File) {
-    this.ifcModel = await this.ifcViewer?.IFC.loadIfc(file);
-    this.replaceOriginalModelBySubset(this.ifcModel, file.name)
+    this.ifcModel = await this.ifcViewer?.IFC.loadIfc(file, true);
+    this.replaceOriginalModelBySubset(this.ifcModel, file.name);
 
     this.generateFloorPlans();
 
     // const properties = this.ifcViewer?.IFC.getSpatialStructure(this.ifcModel.modelID);
+  }
+
+  async loadGLTF(file: File){
+    const url = URL.createObjectURL(file);
+
+    this.navMesh = await this.ifcViewer?.GLTF.load(url);
   }
 
   ////////////////////////////////////////////////////////////////////////////
@@ -120,12 +130,76 @@ export class IfcService {
     this.toggleSubsetVisibility(this.modelSubset, true);
   }
 
-
   ////////////////////////////////////////////////////////////////////////////
   // PROPERTIES
   async logProperties(ifcObject: IfcObject){
     const properties = await this.ifcViewer?.IFC.getProperties(ifcObject.modelID, ifcObject.id, true, true);
     console.log(properties);
+
+  }
+
+
+  /////////////////////////////////////////////////////////////////////////
+  // GLTF
+  async createGltfForNavMesh(file: File){
+    const url = URL.createObjectURL(file);
+
+    const result = await this.ifcViewer?.GLTF.exportIfcFileAsGltf({
+      ifcFileUrl: url,
+      splitByFloors: true,
+      categories: {
+          walls: [IFCWALL, IFCWALLSTANDARDCASE],
+          slabs: [IFCSLAB],
+          doors: [IFCDOOR],
+          stairs: [IFCSTAIR]
+      },
+      getProperties: false
+    });
+
+    if(!result) return;
+
+    // Download result
+    const link = document.createElement('a');
+    document.body.appendChild(link);
+
+    for(const categoryName in result.gltf) {
+        const category = result.gltf[categoryName];
+        for(const levelName in category) {
+            const file = category[levelName].file;
+            if(file) {
+                link.download = `${file.name}_${categoryName}_${levelName}.gltf`;
+                link.href = URL.createObjectURL(file);
+                link.click();
+            }
+        }
+    }
+
+    for(let jsonFile of result.json) {
+        link.download = `${jsonFile.name}.json`;
+        link.href = URL.createObjectURL(jsonFile);
+        link.click();
+    }
+
+    link.remove();
+  }
+
+
+
+  /////////////////////////////////////////////////////////////////////////
+  // CHECK FUNCTIONS
+  async checkRoomSizes(){
+    const spaces = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSPACE, false);
+    console.log('Ifc spaces:')
+    console.log(spaces);
+
+    //TODO: Parse actual ifc file
+    // We know that room with id 246 is the critical
+    const criticalRoom = 246;
+
+    this.select(this.ifcModel.modelID, criticalRoom);
+    this.showFloorPlan('102');
+
+    return criticalRoom;
   }
 
   /////////////////////////////////////////////////////////////////////////
@@ -136,13 +210,12 @@ export class IfcService {
     const lineMaterial = new LineBasicMaterial({ color: 'black' });
     const baseMaterial = new MeshBasicMaterial({
       polygonOffset: true,
-      polygonOffsetFactor: 1, // positive value pushes polygon further away
+      polygonOffsetFactor: 1,
       polygonOffsetUnits: 1,
     });
     await this.ifcViewer?.edges.create('planview', this.ifcModel.modelID, lineMaterial, baseMaterial);
 
     this.floorplans = this.ifcViewer?.plans.getAll(this.ifcModel.modelID);
-    console.log(this.floorplans);
     this.floorplansUpdated.emit(this.floorplans);
   }
 
@@ -150,7 +223,6 @@ export class IfcService {
     this.ifcViewer?.plans.goTo(this.ifcModel.modelID, floorplan);
     this.ifcViewer?.edges.toggle('planview', true);
   }
-
 
   ////////////////////////////////////////////////////////////////////////////
   // VISIBILITY
@@ -169,7 +241,6 @@ export class IfcService {
 
   async showIfcSpaces(){
     const spaces = await this.ifcViewer?.IFC.getAllItemsOfType(0, IFCSPACE, false) as number[];
-    console.log(spaces);
 
     const spaceMaterial = this.newMaterial(0xfbc02d, 50);
     const spacesSubset = this.ifcViewer?.IFC.loader.ifcManager.createSubset({

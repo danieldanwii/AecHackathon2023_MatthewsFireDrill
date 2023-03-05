@@ -8,9 +8,10 @@ import { IfcService } from './services/ifc.service';
 
 import { AppComponent } from './app.component';
 import { MainMenuComponent } from './main-menu/main-menu.component';
+import { ModelChecksComponent } from './model-checks/model-checks.component';
 
 @NgModule({
-  declarations: [AppComponent, MainMenuComponent],
+  declarations: [AppComponent, MainMenuComponent, ModelChecksComponent],
   imports: [
     BrowserModule,
     BrowserAnimationsModule,

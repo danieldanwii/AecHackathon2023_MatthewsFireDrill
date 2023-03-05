@@ -1,0 +1,23 @@
+<div id="fire-check-menu">
+
+    <div id="issue-areas">
+        <button (click)="onAreaClick()">Area</button>
+        <button>Exits</button>
+        <button>Escape route</button>
+    </div>
+    
+    <div id="issue-areas-details">
+        <p *ngIf="criticalRoom">Room with id: {{criticalRoom}} does not live up to the requirements!</p>
+    </div>
+
+    <div id="potential-solutions">
+        <hr>
+        <h2>Solutions</h2>
+        <ul *ngIf="criticalRoom">
+            <li>Comparmentalize the area to include more fire zones</li>
+            <li>Include active fire protection systems</li>
+        </ul>
+    </div>
+
+</div>
+

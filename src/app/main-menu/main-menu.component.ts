@@ -46,4 +46,23 @@ export class MainMenuComponent implements OnInit{
     this.ifcService.showFloorsDoorsAndStairs();
   }
   
+  onGetGltfFiles(event: Event){
+
+    const files: FileList | null = (event.target as HTMLInputElement).files;
+    
+    if(!files) return;
+
+    const ifcFile: File = files[0];
+    this.ifcService.createGltfForNavMesh(ifcFile);
+  }
+
+  onReadGltfFiles(event: Event){
+
+    const files: FileList | null = (event.target as HTMLInputElement).files;
+    
+    if(!files) return;
+
+    const gltfFile: File = files[0];
+    this.ifcService.loadGLTF(gltfFile);
+  }
 }
