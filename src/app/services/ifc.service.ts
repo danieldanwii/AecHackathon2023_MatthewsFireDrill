@@ -1,4 +1,4 @@
-import { DoubleSide, MeshLambertMaterial, MeshBasicMaterial, LineBasicMaterial } from 'three';
+import { Color, DoubleSide, MeshLambertMaterial, MeshBasicMaterial, LineBasicMaterial } from 'three';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { IFCLoader } from 'web-ifc-three/IFCLoader';
 import { IfcScene } from 'web-ifc-viewer/dist/components/context/scene';
@@ -52,10 +52,12 @@ export class IfcService {
 
     const preselectMaterial = this.newMaterial(0xfbc02d, 0.2);
     const selectMaterial = this.newMaterial(0xfbc02d, 0.5);
+    const backgroundColor = new Color(120, 120, 120);
     this.ifcViewer = new IfcViewerAPI({
       container: this.container,
       preselectMaterial,
       selectMaterial,
+      backgroundColor
     });
 
     this.ifcViewer.axes.setAxes();
@@ -183,8 +185,6 @@ export class IfcService {
     link.remove();
   }
 
-
-
   /////////////////////////////////////////////////////////////////////////
   // CHECK FUNCTIONS
   async checkRoomSizes(){
@@ -200,6 +200,16 @@ export class IfcService {
     this.showFloorPlan('102');
 
     return criticalRoom;
+  }
+
+  async checkExits(){
+    this.ifcViewer?.IFC.selector.unpickIfcItems();
+    const exits = 3729;
+
+    this.select(this.ifcModel.modelID, exits);
+    this.showFloorPlan('102');
+
+    return exits;
   }
 
   /////////////////////////////////////////////////////////////////////////

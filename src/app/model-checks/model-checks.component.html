@@ -1,13 +1,14 @@
 <div id="fire-check-menu">
 
     <div id="issue-areas">
-        <button (click)="onAreaClick()">Area</button>
-        <button>Exits</button>
-        <button>Escape route</button>
+        <button (click)="onAreaClick()" class="btn btn-primary">Area</button>
+        <button (click)="onExitsClick()" class="btn btn-primary">Exits</button>
+        <button class="btn btn-primary">Escape route</button>
     </div>
     
     <div id="issue-areas-details">
         <p *ngIf="criticalRoom">Room with id: {{criticalRoom}} does not live up to the requirements!</p>
+        <p *ngIf="exits">There seems to be only one exit from the room, this is not sufficient!</p>
     </div>
 
     <div id="potential-solutions">
@@ -16,6 +17,9 @@
         <ul *ngIf="criticalRoom">
             <li>Comparmentalize the area to include more fire zones</li>
             <li>Include active fire protection systems</li>
+        </ul>
+        <ul *ngIf="exits">
+            <li>Create more exits from the room.</li>
         </ul>
     </div>
 

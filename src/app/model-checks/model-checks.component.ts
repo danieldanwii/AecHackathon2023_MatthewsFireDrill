@@ -8,6 +8,7 @@ import { IfcService } from '../services/ifc.service';
 })
 export class ModelChecksComponent {
   criticalRoom: number | undefined;
+  exits: number | undefined;
 
   constructor(private ifcService: IfcService){
 
@@ -15,6 +16,12 @@ export class ModelChecksComponent {
 
   async onAreaClick(){
     this.criticalRoom = await this.ifcService.checkRoomSizes();
+  }
+
+  async onExitsClick(){
+    this.criticalRoom = undefined;
+
+    this.exits = await this.ifcService.checkExits();
   }
 
 }
